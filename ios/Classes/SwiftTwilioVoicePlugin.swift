@@ -6,7 +6,7 @@ import TwilioVoice
 import CallKit
 import UserNotifications
 
-public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHandler, PKPushRegistryDelegate, NotificationDelegate, CallDelegate, AVAudioPlayerDelegate, CXProviderDelegate {
+public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHandler, NotificationDelegate, CallDelegate, AVAudioPlayerDelegate, CXProviderDelegate {
     
 
     var _result: FlutterResult?
@@ -29,7 +29,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
     }
     var callArgs: Dictionary<String, AnyObject> = [String: AnyObject]()
     
-    var voipRegistry: PKPushRegistry
     var incomingPushCompletionCallback: (()->Swift.Void?)? = nil
     
     var callInvite:CallInvite?
@@ -51,7 +50,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
     public override init() {
         
         //isSpinning = false
-        voipRegistry = PKPushRegistry.init(queue: DispatchQueue.main)
         let configuration = CXProviderConfiguration(localizedName: SwiftTwilioVoicePlugin.appName)
         configuration.maximumCallGroups = 1
         configuration.maximumCallsPerCallGroup = 1
@@ -68,9 +66,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         
         callKitProvider.setDelegate(self, queue: nil)
         
-        voipRegistry.delegate = self
-        voipRegistry.desiredPushTypes = Set([PKPushType.voIP])
-
         let appDelegate = UIApplication.shared.delegate
         guard let controller = appDelegate?.window??.rootViewController as? FlutterViewController else {
             fatalError("rootViewController is not type FlutterViewController")
@@ -328,36 +323,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         }
     }
     
-    
-    // MARK: PKPushRegistryDelegate
-    public func pushRegistry(_ registry: PKPushRegistry, didUpdate credentials: PKPushCredentials, for type: PKPushType) {
-        self.sendPhoneCallEvents(description: "LOG|pushRegistry:didUpdatePushCredentials:forType:", isError: false)
-        
-        if (type != .voIP) {
-            return
-        }
-        
-        guard registrationRequired() || deviceToken != credentials.token else { return }
-
-        let deviceToken = credentials.token
-        
-        self.sendPhoneCallEvents(description: "LOG|pushRegistry:attempting to register with twilio", isError: false)
-        if let token = accessToken {
-            TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { (error) in
-                if let error = error {
-                    self.sendPhoneCallEvents(description: "LOG|An error occurred while registering: \(error.localizedDescription)", isError: false)
-                    self.sendPhoneCallEvents(description: "DEVICETOKEN|\(String(decoding: deviceToken, as: UTF8.self))", isError: false)
-                }
-                else {
-                    self.sendPhoneCallEvents(description: "LOG|Successfully registered for VoIP push notifications.", isError: false)
-                }
-            }
-        }
-        self.deviceToken = deviceToken
-        UserDefaults.standard.set(Date(), forKey: kCachedBindingDate)
-
-    }
-    
     /**
       * The TTL of a registration is 1 year. The TTL for registration for this device/identity pair is reset to
       * 1 year whenever a new registration occurs or a push notification is sent to this device/identity pair.
@@ -378,17 +343,7 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
              return false
          }
          return true;
-     }
-    
-    public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
-        self.sendPhoneCallEvents(description: "LOG|pushRegistry:didInvalidatePushTokenForType:", isError: false)
-        
-        if (type != .voIP) {
-            return
-        }
-        
-        self.unregister()
-    }
+     }    
     
     func unregister() {
         
@@ -411,43 +366,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         
         // Remove the cached binding as credentials are invalidated
         UserDefaults.standard.removeObject(forKey: kCachedBindingDate)
-    }
-    
-    /**
-     * Try using the `pushRegistry:didReceiveIncomingPushWithPayload:forType:withCompletionHandler:` method if
-     * your application is targeting iOS 11. According to the docs, this delegate method is deprecated by Apple.
-     */
-    public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType) {
-        self.sendPhoneCallEvents(description: "LOG|pushRegistry:didReceiveIncomingPushWithPayload:forType:", isError: false)
-        
-        if (type == PKPushType.voIP) {
-            TwilioVoiceSDK.handleNotification(payload.dictionaryPayload, delegate: self, delegateQueue: nil)
-        }
-    }
-    
-    /**
-     * This delegate method is available on iOS 11 and above. Call the completion handler once the
-     * notification payload is passed to the `TwilioVoice.handleNotification()` method.
-     */
-    public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
-        self.sendPhoneCallEvents(description: "LOG|pushRegistry:didReceiveIncomingPushWithPayload:forType:completion:", isError: false)
-        // Save for later when the notification is properly handled.
-//        self.incomingPushCompletionCallback = completion
-        
-        if (type == PKPushType.voIP) {
-            TwilioVoiceSDK.handleNotification(payload.dictionaryPayload, delegate: self, delegateQueue: nil)
-        }
-        
-        if let version = Float(UIDevice.current.systemVersion), version < 13.0 {
-            // Save for later when the notification is properly handled.
-            self.incomingPushCompletionCallback = completion
-        } else {
-            /**
-             * The Voice SDK processes the call notification and returns the call invite synchronously. Report the incoming call to
-             * CallKit and fulfill the completion before exiting this callback method.
-             */
-            completion()
-        }
     }
     
     func incomingPushHandled() {

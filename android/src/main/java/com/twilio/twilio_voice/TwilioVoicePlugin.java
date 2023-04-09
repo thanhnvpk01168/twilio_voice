@@ -10,7 +10,6 @@ import com.twilio.voice.RegistrationException;
 import com.twilio.voice.RegistrationListener;
 import com.twilio.voice.UnregistrationListener;
 import com.twilio.voice.Voice;
-import com.twilio.twilio_voice.AnswerJavaActivity;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -131,14 +130,9 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
 
             switch (action) {
                 case Constants.ACTION_INCOMING_CALL:
-                    handleIncomingCall(activeCallInvite.getFrom(), activeCallInvite.getTo());
-                    if (Build.VERSION.SDK_INT >= 29 && !isAppVisible()) {
-                        break;
-                    }
-                    startAnswerActivity(activeCallInvite, activeCallNotificationId);
+                    
                     break;
                 case Constants.ACTION_CANCEL_CALL:
-                    handleCancel();
                     break;
                 case Constants.ACTION_REJECT:
                     handleReject();
@@ -146,13 +140,7 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
                 case Constants.ACTION_ACCEPT:
                         int acceptOrigin = intent.getIntExtra(Constants.ACCEPT_CALL_ORIGIN,0);
                         if(acceptOrigin == 0){
-                             Intent answerIntent = new Intent(activity, AnswerJavaActivity.class);
-                            answerIntent.setAction(Constants.ACTION_ACCEPT);
-                            answerIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, activeCallNotificationId);
-                            answerIntent.putExtra(Constants.INCOMING_CALL_INVITE, activeCallInvite);
-                            answerIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                            answerIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            activity.startActivity(answerIntent);
+                             
                         }else{
                             answer();
                         }
@@ -191,16 +179,6 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
         }
     }
 
-    private void startAnswerActivity(CallInvite callInvite, int notificationId) {
-        Intent intent = new Intent(activity, AnswerJavaActivity.class);
-        intent.setAction(Constants.ACTION_INCOMING_CALL);
-        intent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
-        intent.putExtra(Constants.INCOMING_CALL_INVITE, callInvite);
-        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        activity.startActivity(intent);
-    }
-
     private void handleIncomingCall(String from, String to) {
         sendPhoneCallEvents("Ringing|" + from + "|" + to + "|" + "Incoming" + formatCustomParams(activeCallInvite.getCustomParameters()));
 
@@ -216,19 +194,6 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
 
     private void handleReject() {
         sendPhoneCallEvents("LOG|Call Rejected");
-
-    }
-
-    private void handleCancel() {
-        callOutgoing = false;
-        sendPhoneCallEvents("Missed Call");
-        sendPhoneCallEvents("Call Ended");
-
-        Intent intent = new Intent(activity, AnswerJavaActivity.class);
-        intent.setAction(Constants.ACTION_CANCEL_CALL);
-        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        activity.startActivity(intent);
 
     }
 
@@ -353,7 +318,6 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
     @Override
     public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
         Log.d(TAG, "Detatched from Flutter engine");
-        SoundPoolManager.getInstance(context).release();
         context = null;
         methodChannel.setMethodCallHandler(null);
         methodChannel = null;
@@ -486,14 +450,7 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
                 result.success(true);
             }
         } else if (call.method.equals("backgroundCallUI")) {
-            if (activeCall != null) {
-                Intent intent = new Intent(activity, BackgroundCallJavaActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                intent.putExtra(Constants.CALL_FROM, activeCall.getFrom());
-                activity.startActivity(intent);
-                backgroundCallUI = true;
-            }
+           
 
         } else if (call.method.equals("show-notifications")) {
             boolean show = call.argument("show");
@@ -664,15 +621,8 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
         if (activeCall == null) return;
 
         if (backgroundCallUI) {
-            Intent intent = new Intent(activity, BackgroundCallJavaActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            intent.setAction(Constants.ACTION_CANCEL_CALL);
-
-            activity.startActivity(intent);
+           
         }
-        SoundPoolManager.getInstance(context).playDisconnect();
         backgroundCallUI = false;
         callOutgoing = false;
         activeCall = null;
