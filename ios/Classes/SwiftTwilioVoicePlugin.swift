@@ -479,7 +479,6 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         let from = (call.from ?? self.identity)
         let to = (call.to ?? self.callTo)
         self.sendPhoneCallEvents(description: "Ringing|\(from)|\(to)|\(direction)", isError: false)
-        
         //self.placeCallButton.setTitle("Ringing", for: .normal)
     }
     
@@ -492,7 +491,7 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         if let callKitCompletionCallback = callKitCompletionCallback {
             callKitCompletionCallback(true)
         }
-        
+        audioDevice.isEnabled = true
         toggleAudioRoute(toSpeaker: false)
     }
     
